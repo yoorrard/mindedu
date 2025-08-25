@@ -17,7 +17,7 @@ async function callApi(action: string, payload: object): Promise<any> {
         }
 
         const data = await response.json();
-        // The serverless function returns the full Gemini response,
+        // The serverless function returns { text: ... },
         // so we extract the text property here.
         return data.text;
     } catch (error) {
@@ -76,10 +76,21 @@ export const generateScenarios = async (count: number): Promise<Scenario[]> => {
                 temperature: 1.0,
             },
         };
-        const jsonString = await callApi('generateScenarios', payload);
+        let jsonString = await callApi('generateScenarios', payload);
+
+        if (typeof jsonString !== 'string') {
+            throw new Error("API returned a non-string response for scenarios.");
+        }
+
+        // Clean up potential markdown code block fences
+        const jsonMatch = jsonString.match(/```(json)?([\s\S]*?)```/);
+        if (jsonMatch && jsonMatch[2]) {
+            jsonString = jsonMatch[2];
+        }
+        
         const generatedData = JSON.parse(jsonString.trim());
         
-        if (!Array.isArray(generatedData) || generatedData.length !== count) {
+        if (!Array.isArray(generatedData) || generatedData.length === 0) {
             throw new Error("Generated data is not a valid array of scenarios.");
         }
         return generatedData as Scenario[];

@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 export const config = {
   runtime: 'edge',
@@ -13,7 +13,7 @@ export default async function handler(req: Request) {
   }
 
   try {
-    const { action, payload } = await req.json();
+    const { payload } = await req.json();
     const apiKey = process.env.API_KEY;
 
     if (!apiKey) {
@@ -26,10 +26,16 @@ export default async function handler(req: Request) {
     const ai = new GoogleGenAI({ apiKey });
 
     // The payload received from the client is already structured for the generateContent call
-    const response = await ai.models.generateContent(payload);
+    const result: GenerateContentResponse = await ai.models.generateContent(payload);
 
-    // Return the entire response object from Gemini API back to the client
-    return new Response(JSON.stringify(response), {
+    // The .text property is a getter. When stringifying the whole result object,
+    // the getter is not invoked, and its value is lost.
+    // We explicitly create a new object with the text to ensure it's in the response.
+    const responseData = {
+      text: result.text,
+    };
+
+    return new Response(JSON.stringify(responseData), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
