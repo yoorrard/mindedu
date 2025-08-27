@@ -2,10 +2,10 @@ import { Type } from "@google/genai";
 import { Scenario, UserAnswer } from '../types';
 import { FALLBACK_SCENARIOS } from '../constants';
 
-// Helper function to call our secure API endpoint
+// Helper function to call our secure API endpoint for FAST operations
 async function callApi(action: string, payload: object): Promise<any> {
     try {
-        const response = await fetch('/api/gemini', {
+        const response = await fetch('/api/gemini', { // This endpoint uses the fast 'edge' runtime
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action, payload }),
@@ -134,7 +134,22 @@ export const generateMindGrowthReport = async (answers: UserAnswer[]): Promise<s
             `,
             config: { temperature: 0.6 }
         };
-        return await callApi('generateReport', payload);
+        
+        // This is a long-running operation, so we call a dedicated 'nodejs' endpoint
+        const response = await fetch('/api/generateReport', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload }), 
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            throw new Error(errorBody.error || 'Report generation API request failed');
+        }
+
+        const data = await response.json();
+        return data.text;
+
     } catch (error) {
         console.error("Error generating report:", error);
         return "리포트를 생성하는 중 오류가 발생했어요. 다시 시도해 주세요.";
