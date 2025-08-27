@@ -2,10 +2,10 @@ import { Type } from "@google/genai";
 import { Scenario, UserAnswer } from '../types';
 import { FALLBACK_SCENARIOS } from '../constants';
 
-// Helper function to call our secure API endpoint for FAST operations
+// Helper function to call our secure API endpoint
 async function callApi(action: string, payload: object): Promise<any> {
     try {
-        const response = await fetch('/api/gemini', { // This endpoint uses the fast 'edge' runtime
+        const response = await fetch('/api/gemini', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action, payload }),
@@ -134,55 +134,9 @@ export const generateMindGrowthReport = async (answers: UserAnswer[]): Promise<s
             `,
             config: { temperature: 0.6 }
         };
-        
-        const response = await fetch('/api/generateReport', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payload }), 
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ error: 'Report generation API request failed with non-JSON response' }));
-            throw new Error(errorBody.error || 'Report generation API request failed');
-        }
-        
-        if (!response.body) {
-            throw new Error("Response body is null");
-        }
-        
-        // Handle the streaming response from the server
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let report = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            report += decoder.decode(value, { stream: true });
-        }
-
-        return report;
-
+        return await callApi('generateReport', payload);
     } catch (error) {
         console.error("Error generating report:", error);
         return "리포트를 생성하는 중 오류가 발생했어요. 다시 시도해 주세요.";
-    }
-};
-
-export const saveReportToSheet = async (answers: UserAnswer[], report: string): Promise<void> => {
-    try {
-        const response = await fetch('/api/saveToSheet', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userAnswers: answers, mindGrowthReport: report }),
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.json();
-            throw new Error(errorBody.error || 'Failed to save report to sheet');
-        }
-        console.log("Report successfully saved to Google Sheet.");
-    } catch (error) {
-        // Log the error but don't re-throw, as failing to save shouldn't block the user from seeing their report.
-        console.error("Could not save report to Google Sheet:", error);
     }
 };
