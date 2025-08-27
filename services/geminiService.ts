@@ -140,3 +140,22 @@ export const generateMindGrowthReport = async (answers: UserAnswer[]): Promise<s
         return "리포트를 생성하는 중 오류가 발생했어요. 다시 시도해 주세요.";
     }
 };
+
+export const saveReportToSheet = async (answers: UserAnswer[], report: string): Promise<void> => {
+    try {
+        const response = await fetch('/api/saveToSheet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAnswers: answers, mindGrowthReport: report }),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            throw new Error(errorBody.error || 'Failed to save report to sheet');
+        }
+        console.log("Report successfully saved to Google Sheet.");
+    } catch (error) {
+        // Log the error but don't re-throw, as failing to save shouldn't block the user from seeing their report.
+        console.error("Could not save report to Google Sheet:", error);
+    }
+};

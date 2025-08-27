@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, Scenario, Emotion, Response, UserAnswer } from './types';
-import { generateScenarios, provideFeedbackOnResponse, generateMindGrowthReport } from './services/geminiService';
+import { generateScenarios, provideFeedbackOnResponse, generateMindGrowthReport, saveReportToSheet } from './services/geminiService';
 import { FALLBACK_SCENARIOS } from './constants';
 import { CheckIcon, CrossIcon, PencilIcon, HeartIcon, LightbulbIcon, BrainIcon, LoadingSpinnerIcon } from './components/icons';
 
@@ -164,12 +164,16 @@ const App: React.FC = () => {
         const selectedEmotions = currentScenario.emotions.filter(e => selectedEmotionIds.includes(e.id));
         const selectedResponse = currentScenario.responses.find(r => r.id === selectedResponseId);
 
-        setUserAnswers(prev => [...prev, {
+        const newAnswer = {
             scenario: currentScenario.scenario,
             selectedEmotionTexts: selectedEmotions.map(e => e.text),
             selectedResponseText: selectedResponse?.text || "",
             writtenResponse: writtenResponse,
-        }]);
+        };
+        
+        // This is the last step for the scenario, so we add it to userAnswers
+        // We ensure we only add answers once, right at the end of a scenario.
+        setUserAnswers(prev => [...prev, newAnswer]);
     };
 
     const handleNext = () => {
@@ -178,9 +182,20 @@ const App: React.FC = () => {
         if (currentScenarioIndex >= TOTAL_SCENARIOS - 1) {
             setGameState(GameState.GENERATING_REPORT);
             const generateReport = async () => {
+                // Ensure the last answer is captured before generating the report
+                const finalAnswers = userAnswers;
+                // Note: handleWrittenResponseSubmit already saves the answer, 
+                // so we use the state directly.
+                
                 try {
-                    const report = await generateMindGrowthReport(userAnswers);
+                    const report = await generateMindGrowthReport(finalAnswers);
                     setMindGrowthReport(report);
+                    
+                    // Save the results to Google Sheets in the background.
+                    // This is non-blocking for the user.
+                    if (report) {
+                       await saveReportToSheet(finalAnswers, report);
+                    }
                 } catch (error) {
                     console.error("Failed to generate report:", error);
                     setApiError("리포트를 생성하는 데 문제가 발생했어요.");
