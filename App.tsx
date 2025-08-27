@@ -194,7 +194,7 @@ const App: React.FC = () => {
                     // Save the results to Google Sheets in the background.
                     // This is non-blocking for the user.
                     if (report) {
-                       await saveReportToSheet(finalAnswers, report);
+                       saveReportToSheet(finalAnswers, report);
                     }
                 } catch (error) {
                     console.error("Failed to generate report:", error);
