@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { GameState, Scenario, Emotion, Response, UserAnswer } from './types';
 import { generateScenarios, provideFeedbackOnResponse, generateMindGrowthReport } from './services/geminiService';
 import { FALLBACK_SCENARIOS } from './constants';
-import { CheckIcon, CrossIcon, PencilIcon, HeartIcon, LightbulbIcon, BrainIcon, LoadingSpinnerIcon } from './components/icons';
+import { CheckIcon, CrossIcon, PencilIcon, HeartIcon, LightbulbIcon, BrainIcon, LoadingSpinnerIcon, DownloadIcon } from './components/icons';
 
 const TOTAL_SCENARIOS = 3;
 
@@ -79,6 +81,8 @@ const App: React.FC = () => {
     const [feedbackMessage, setFeedbackMessage] = useState<string>("");
     const [isChoiceCorrect, setIsChoiceCorrect] = useState(false);
     const [apiError, setApiError] = useState<string | null>(null);
+    const [isSavingPdf, setIsSavingPdf] = useState(false);
+
 
     const loadScenarios = useCallback(async () => {
         setApiError(null);
@@ -207,6 +211,52 @@ const App: React.FC = () => {
         return reportData;
     };
 
+    const handleSavePdf = async () => {
+        const reportElement = document.getElementById('report-content');
+        if (!reportElement) return;
+
+        setIsSavingPdf(true);
+        setApiError(null);
+
+        try {
+            const canvas = await html2canvas(reportElement, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: null,
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'pt',
+                format: 'a4'
+            });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgProps = pdf.getImageProperties(imgData);
+            const imgWidth = imgProps.width;
+            const imgHeight = imgProps.height;
+            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+            
+            // Add a small margin
+            const scaledWidth = imgWidth * ratio * 0.9;
+            const scaledHeight = imgHeight * ratio * 0.9;
+            const x = (pdfWidth - scaledWidth) / 2;
+            const y = (pdfHeight - scaledHeight) / 2;
+
+            pdf.addImage(imgData, 'PNG', x, y, scaledWidth, scaledHeight);
+            pdf.save('마음성장-리포트.pdf');
+
+        } catch (error) {
+            console.error("Failed to save PDF:", error);
+            setApiError("PDF를 저장하는 데 문제가 발생했어요.");
+        } finally {
+            setIsSavingPdf(false);
+        }
+    };
+
     const currentScenario = scenarios[currentScenarioIndex];
 
     const renderContent = () => {
@@ -256,7 +306,7 @@ const App: React.FC = () => {
                 const reportData = parseReport(mindGrowthReport);
                 return (
                     <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto p-4">
-                        <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-8 rounded-2xl shadow-2xl text-center">
+                        <div id="report-content" className="bg-gradient-to-br from-blue-50 to-purple-50 p-8 rounded-2xl shadow-2xl text-center">
                             {apiError && <p className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mb-4" role="alert">{apiError}</p>}
                             <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-6">마음 성장 리포트 쑥쑥 🌱</h1>
 
@@ -264,9 +314,24 @@ const App: React.FC = () => {
                             {reportData['생각과 행동의 힘 💪'] && <ReportSection icon={<BrainIcon className="w-8 h-8 text-blue-500 mr-3" />} title="생각과 행동의 힘" content={reportData['생각과 행동의 힘 💪']} />}
                             {reportData['성장을 위한 제안 ✨'] && <ReportSection icon={<LightbulbIcon className="w-8 h-8 text-green-500 mr-3" />} title="성장을 위한 제안" content={reportData['성장을 위한 제안 ✨']} />}
 
-                            <button onClick={handleRestart} className="mt-8 bg-green-500 hover:bg-green-600 text-white font-bold text-xl py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-transform duration-300">
-                                새로운 이야기로 다시하기
-                            </button>
+                            <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+                                <button onClick={handleSavePdf} disabled={isSavingPdf} className="flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white font-bold text-xl py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-transform duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                                    {isSavingPdf ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                                            저장 중...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <DownloadIcon className="w-6 h-6 mr-2" />
+                                            PDF로 저장하기
+                                        </>
+                                    )}
+                                </button>
+                                <button onClick={handleRestart} className="bg-green-500 hover:bg-green-600 text-white font-bold text-xl py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-transform duration-300">
+                                    새로운 이야기로 다시하기
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );
