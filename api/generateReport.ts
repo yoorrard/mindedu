@@ -1,7 +1,10 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 export const config = {
   runtime: 'nodejs',
+  // Vercel Pro plan can benefit from longer max duration for complex tasks.
+  // Hobby plan is limited to 10s for execution, but streaming starts the response immediately.
+  maxDuration: 60,
 };
 
 export default async function handler(req: Request) {
@@ -25,15 +28,27 @@ export default async function handler(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    const result: GenerateContentResponse = await ai.models.generateContent(payload);
+    const streamingResponse = await ai.models.generateContentStream(payload);
 
-    const responseData = {
-      text: result.text,
-    };
+    // Create a ReadableStream to pipe the AI's response to the client
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        for await (const chunk of streamingResponse) {
+          const text = chunk.text;
+          if (text) {
+            controller.enqueue(encoder.encode(text));
+          }
+        }
+        controller.close();
+      },
+    });
 
-    return new Response(JSON.stringify(responseData), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    return new Response(stream, {
+      headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+      },
     });
 
   } catch (error) {

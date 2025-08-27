@@ -135,7 +135,6 @@ export const generateMindGrowthReport = async (answers: UserAnswer[]): Promise<s
             config: { temperature: 0.6 }
         };
         
-        // This is a long-running operation, so we call a dedicated 'nodejs' endpoint
         const response = await fetch('/api/generateReport', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -143,12 +142,25 @@ export const generateMindGrowthReport = async (answers: UserAnswer[]): Promise<s
         });
 
         if (!response.ok) {
-            const errorBody = await response.json();
+            const errorBody = await response.json().catch(() => ({ error: 'Report generation API request failed with non-JSON response' }));
             throw new Error(errorBody.error || 'Report generation API request failed');
         }
+        
+        if (!response.body) {
+            throw new Error("Response body is null");
+        }
+        
+        // Handle the streaming response from the server
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let report = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            report += decoder.decode(value, { stream: true });
+        }
 
-        const data = await response.json();
-        return data.text;
+        return report;
 
     } catch (error) {
         console.error("Error generating report:", error);
